@@ -22,7 +22,6 @@ import {
 
 const app = express();
 
-// Il faut le corps BRUT (pas parsé en JSON) pour vérifier la signature HMAC.
 app.use(express.raw({ type: "application/json" }));
 
 function verifyShopifyWebhook(req) {
@@ -39,9 +38,6 @@ function verifyShopifyWebhook(req) {
 
 let discordClient;
 
-// Traduit un payload Shopify "order" vers notre format interne.
-// Ne touche jamais au statut interne (achat/reçu/vérifié...) sauf pour
-// une commande qu'on découvre pour la première fois.
 function orderFromPayload(payload, { isNew }) {
   const lineItemsText = (payload.line_items || [])
     .map((li) => `${li.title} ×${li.quantity}`)
@@ -62,8 +58,6 @@ function orderFromPayload(payload, { isNew }) {
   });
 }
 
-// Fabrique une route de webhook générique : vérifie la signature,
-// répond tout de suite à Shopify, puis exécute le traitement demandé.
 function webhookRoute(handler) {
   return async (req, res) => {
     if (!verifyShopifyWebhook(req)) {
@@ -80,7 +74,6 @@ function webhookRoute(handler) {
   };
 }
 
-// --- orders/create ---
 app.post(
   "/webhooks/orders-create",
   webhookRoute(async (payload) => {
@@ -89,7 +82,6 @@ app.post(
   })
 );
 
-// --- orders/paid ---
 app.post(
   "/webhooks/orders-paid",
   webhookRoute(async (payload) => {
@@ -99,7 +91,6 @@ app.post(
   })
 );
 
-// --- orders/cancelled ---
 app.post(
   "/webhooks/orders-cancelled",
   webhookRoute(async (payload) => {
@@ -109,7 +100,6 @@ app.post(
   })
 );
 
-// --- orders/updated (couvre aussi les expéditions partielles) ---
 app.post(
   "/webhooks/orders-updated",
   webhookRoute(async (payload) => {
@@ -125,7 +115,6 @@ app.post(
   })
 );
 
-// --- orders/fulfilled ---
 app.post(
   "/webhooks/orders-fulfilled",
   webhookRoute(async (payload) => {
@@ -135,7 +124,6 @@ app.post(
   })
 );
 
-// --- customers/create ---
 app.post(
   "/webhooks/customers-create",
   webhookRoute(async (payload) => {
@@ -150,8 +138,6 @@ app.post(
 
 app.get("/health", (_req, res) => res.send("ok"));
 
-// --- Installation de l'app Shopify (flux OAuth) ---
-// Étape 1 : on redirige le marchand vers l'écran d'autorisation Shopify.
 app.get("/auth", (req, res) => {
   const shop = req.query.shop;
   if (!shop || !/^[a-z0-9-]+\.myshopify\.com$/.test(shop)) {
@@ -161,8 +147,6 @@ app.get("/auth", (req, res) => {
   res.redirect(buildAuthorizeUrl(shop, state));
 });
 
-// Étape 2 : Shopify revient ici avec un code temporaire à échanger contre
-// un vrai token d'accès, qu'on sauvegarde localement pour cette boutique.
 app.get("/auth/callback", async (req, res) => {
   const { shop, code, state } = req.query;
   if (!shop || !code || !state) {
@@ -192,4 +176,11 @@ async function main() {
   const port = process.env.PORT || 3000;
   app.listen(port, () => {
     console.log(`Serveur webhook Shopify en écoute sur le port ${port}`);
-    console.log(`URLs à configurer
+  });
+}
+
+main().catch((err) => {
+  console.error("Erreur au démarrage :", err);
+  process.exit(1);
+});
+

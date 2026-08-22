@@ -95,10 +95,6 @@ function orderEmbed(order) {
     .setColor(order.issue && !order.issue.resolved ? 0xb23a2e : 0x3f6b4f);
 }
 
-// --- Notifications liées aux différents webhooks Shopify ---
-// Chaque fonction reprend les infos réellement envoyées par Shopify,
-// rien n'est inventé côté bot.
-
 export async function postNewOrderAlert(client, order) {
   const channel = await client.channels.fetch(process.env.DISCORD_ORDERS_CHANNEL_ID);
   await channel.send({
@@ -203,8 +199,69 @@ export function createDiscordClient() {
           const tracking = interaction.options.getString("tracking");
           const transporteur = interaction.options.getString("transporteur") || "Autre";
 
-          // Appel réel à Shopify : crée le fulfillment, ce qui déclenche
-          // automatiquement l'email natif Shopify au client. Le bot n'écrit
-          // jamais lui-même ce message.
           await createFulfillmentWithTracking({
-            or
+            orderId: id,
+            trackingNumber: tracking,
+            trackingCompany: transporteur,
+            notifyCustomer: true,
+          });
+
+          const updated = updateStatus(id, "expedie");
+          updated.tracking = tracking;
+          await interaction.editReply({
+            content: `📮 Commande #${id} expédiée. Shopify a envoyé la notification au client automatiquement.`,
+            embeds: [orderEmbed(updated)],
+          });
+          return;
+        }
+
+        case "probleme": {
+          const note = interaction.options.getString("note");
+          const updated = flagIssue(id, note);
+          if (!updated) return void (await interaction.reply(`Commande #${id} introuvable.`));
+          await interaction.reply({
+            content: `🚨 Litige enregistré sur #${id}. Aucune action automatique ne sera prise — décidez avec /resoudre.`,
+            embeds: [orderEmbed(updated)],
+          });
+          return;
+        }
+
+        case "resoudre": {
+          const decision = interaction.options.getString("decision");
+          const updated = resolveIssue(id, decision);
+          if (!updated) return void (await interaction.reply(`Pas de litige ouvert pour #${id}.`));
+          await interaction.reply(`✅ Décision enregistrée pour #${id} : **${decision}**.`);
+          return;
+        }
+
+        case "stats": {
+          const s = getStats();
+          const statusLines = Object.entries(s.byStatus)
+            .map(([status, count]) => `• ${STATUS_LABELS[status] || status} : ${count}`)
+            .join("\n") || "—";
+          await interaction.reply(
+            `📊 **Statistiques**\n` +
+              `Commandes totales : ${s.totalOrders}\n` +
+              `Commandes payées : ${s.paidOrders}\n` +
+              `Chiffre d'affaires (payé) : ${s.revenue.toFixed(2)} €\n` +
+              `Litiges ouverts : ${s.openIssues}\n` +
+              `Clients enregistrés : ${s.totalCustomers}\n\n` +
+              `**Par statut**\n${statusLines}`
+          );
+          return;
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      const msg = `Erreur : ${err.message}`;
+      if (interaction.deferred || interaction.replied) {
+        await interaction.editReply(msg);
+      } else {
+        await interaction.reply(msg);
+      }
+    }
+  });
+
+  return client;
+}
+

@@ -138,6 +138,17 @@ app.post(
 
 app.get("/health", (_req, res) => res.send("ok"));
 
+app.get("/debug/config", (_req, res) => {
+  const raw = process.env.SHOPIFY_APP_URL || "";
+  const match = raw.match(/^https?:\/\/[^/\s]+/);
+  const clean = match ? match[0] : null;
+  res.json({
+    rawLength: raw.length,
+    cleanAppUrl: clean,
+    redirectUri: clean ? `${clean}/auth/callback` : null,
+  });
+});
+
 app.get("/auth", (req, res) => {
   const shop = req.query.shop;
   if (!shop || !/^[a-z0-9-]+\.myshopify\.com$/.test(shop)) {
@@ -183,4 +194,3 @@ main().catch((err) => {
   console.error("Erreur au démarrage :", err);
   process.exit(1);
 });
-

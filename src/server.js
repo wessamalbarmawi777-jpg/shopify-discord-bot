@@ -26,7 +26,7 @@ app.use(express.raw({ type: "application/json" }));
 
 function verifyShopifyWebhook(req) {
   const hmacHeader = req.get("X-Shopify-Hmac-Sha256");
-  const secret = process.env.SHOPIFY_WEBHOOK_SECRET;
+  const secret = process.env.SHOPIFY_WEBHOOK_SECRET?.trim();
   if (!hmacHeader || !secret) return false;
   const digest = crypto.createHmac("sha256", secret).update(req.body).digest("base64");
   try {
@@ -137,6 +137,12 @@ app.post(
 );
 
 app.get("/health", (_req, res) => res.send("ok"));
+
+app.get("/", (_req, res) => {
+  res.send(
+    "✅ Bot Shopify → Discord actif. Ce bot n'a pas d'interface web : pilotez-le depuis les commandes slash sur Discord."
+  );
+});
 
 app.get("/debug/config", (_req, res) => {
   const raw = process.env.SHOPIFY_APP_URL || "";
